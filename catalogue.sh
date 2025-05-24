@@ -41,15 +41,22 @@ VALIDATE $? "Enabling nodejs:20"
 dnf install nodejs -y &>>$LOG_FILE
 VALIDATE $? "Installing nodejs:20"
 
-useradd --system --home /app --shell /sbin/nologin --comment "roboshop system user" roboshop &>>$LOG_FILE
-VALIDATE $? "Creating roboshop system user"
+id roboshop
+if [ $? -ne 0 ]
+then
+    useradd --system --home /app --shell /sbin/nologin --comment "roboshop system user" roboshop &>>$LOG_FILE
+    VALIDATE $? "Creating roboshop system user"
+else
+    echo -e "system user roboshop already created.... $Y Skipping $N"
+fi
 
-mkdir /app 
+mkdir -p /app 
 VALIDATE $? "Creating app directory"
 
 curl -o /tmp/catalogue.zip https://roboshop-artifacts.s3.amazonaws.com/catalogue-v3.zip &>>$LOG_FILE
 VALIDATE $? "Downloading catalogue"
 
+rm -rf /app/*
 cd /app 
 unzip /tmp/catalogue.zip &>>$LOG_FILE
 VALIDATE $? "Unzipping catalogue"
@@ -69,4 +76,11 @@ cp $SCRIPT_DIR/mongo.repo /etc/yum.repos.d/mongo.repo
 dnf install mongodb-mongosh -y &>>$LOG_FILE
 VALIDATE $? "Installing MongoDB Client"
 
-mongosh --host mongodb.daws100s.site </app/db/master-data.js &>>$LOG_FILE
+STATUS=$(mongosh --host mongodb.daws100s.site --eval 'db.getMongo().getDBNames().indexOf("catalogue")')
+if [ $STATUS -lt 0 ]
+then
+    mongosh --host mongodb.daws100s.site </app/db/master-data.js &>>$LOG_FILE
+    VALIDATE $? "Loading data into MongoDB"
+else
+    echo -e "Data is already loaded ... $Y SKIPPING $N"
+fi
